@@ -12,6 +12,7 @@ import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.StringType;
 import org.hl7.fhir.r4.model.Observation.ObservationStatus;
+import org.hl7.fhir.r4.model.Quantity;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 //import org.xml.sax.InputSource;
@@ -35,6 +36,12 @@ import java.util.ArrayList;
 public class parserhelper {
 
 	FhirContext ctx;
+	final static String INTEGER = "integer";
+	final static String DECIMAL = "decimal";
+	final static String STRING = "string";
+	final static String BOOLEAN = "boolean";
+	final static String DATE = "date";
+	final static String DATETIME = "dateTime";
 	
 	public parserhelper() {
 		this.ctx = FhirContext.forR4();
@@ -142,31 +149,23 @@ public class parserhelper {
 				}
 			} else if (isTextQuestion){
 				Element textQuestion = getTextQuestion(questionElement);
-				Element textResponse = getTextQuestionResponse(textQuestion);
-				if (isTextQuestionIntegerAndHasResponse(textResponse)) {
-					String response = getIntegerResponse(textResponse);
-					System.out.println("Question is integer");
-					System.out.println("response: " + response);
-					observation = buildIntegerObservationResource(questionElement, response, Id, ctx);
-					observations.add(observation);
-				} else if (isTextQuestionDecimalAndHasResponse(textResponse)) {
-					System.out.println("Question is decimal");
+				Element textQuestionResponse = getTextQuestionResponse(textQuestion);
+				if (isTextQuestionOfTypeAndHasResponse(INTEGER, textQuestionResponse)) {
+					buildAndAddObservationForType(INTEGER, textQuestionResponse, questionElement, Id, ctx, observations);
+				} else if (isTextQuestionOfTypeAndHasResponse(DECIMAL, textQuestionResponse)) {
+					buildAndAddObservationForType(DECIMAL, textQuestionResponse, questionElement, Id, ctx, observations);
 				}
-				else if (isTextQuestionStringAndHasResponse(textResponse)) {
-					String response = getStringResponse(textResponse);
-					System.out.println("Question is String");
-					System.out.println("response: " + response);
-					observation = buildStringObservationResource(questionElement, response, Id, ctx);
-					observations.add(observation);
+				else if (isTextQuestionOfTypeAndHasResponse(STRING, textQuestionResponse)) {
+					buildAndAddObservationForType(STRING, textQuestionResponse, questionElement, Id, ctx, observations);
 				}
-				else if (isTextQuestionBooleanAndHasResponse(textResponse)) {
-					System.out.println("Question is boolean");
+				else if (isTextQuestionOfTypeAndHasResponse(BOOLEAN, textQuestionResponse)) {
+					buildAndAddObservationForType(BOOLEAN, textQuestionResponse, questionElement, Id, ctx, observations);
 				}
-				else if (isTextQuestionDateAndHasResponse(textResponse)) {
+				else if (isTextQuestionOfTypeAndHasResponse(DATE, textQuestionResponse)) {
 					System.out.println("Question is date");
 				}
-				else if (isTextQuestionDateTimeAndHasResponse(textResponse)) {
-					System.out.println("Question is dateTime");
+				else if (isTextQuestionOfTypeAndHasResponse(DATETIME, textQuestionResponse)) {
+					buildAndAddObservationForType(DATETIME, textQuestionResponse, questionElement, Id, ctx, observations);
 				} else {
 					System.out.println("ERROR. TextQuestion type is not accounted for!!!!!");
 				}
@@ -176,6 +175,13 @@ public class parserhelper {
 			}
 		}
 		return observations;
+	}
+	
+	public static void buildAndAddObservationForType (String type, Element textQuestionResponse, Element questionElement, 
+			String Id, FhirContext ctx, ArrayList<Observation> observations) {
+		String response = getTextResponseForType(type, textQuestionResponse);
+		Observation observation = buildTextObservationResource(type, questionElement, response, Id, ctx);
+		observations.add(observation);
 	}
 	
 	public static boolean isQuestionAListQuestion(Element questionElement) {
@@ -204,78 +210,13 @@ public class parserhelper {
 		return responseElement;
 	}
 	
-	public static boolean isTextQuestionIntegerAndHasResponse(Element textQuestionResponse) {
-		NodeList integerElementList = textQuestionResponse.getElementsByTagName("integer");
-		if (integerElementList.getLength() > 0) {
-			Element integerElement = (Element) integerElementList.item(0);
-			if (integerElement.hasAttribute("val")) {
-				return true;
-			}
-		}
-		return false;
-	}
-	
-	public static String getIntegerResponse (Element textQuestionResponse) {
-		Element integerElement = (Element) textQuestionResponse.getElementsByTagName("integer").item(0);
+	public static String getTextResponseForType (String type, Element textQuestionResponse) {
+		Element integerElement = (Element) textQuestionResponse.getElementsByTagName(type).item(0);
 		return integerElement.getAttribute("val");
 	}
 	
-	public static boolean isTextQuestionDecimalAndHasResponse(Element textQuestionResponse) {
-		NodeList decimalElementList = textQuestionResponse.getElementsByTagName("decimal");
-		if (decimalElementList.getLength() > 0) {
-			Element decimalElement = (Element) decimalElementList.item(0);
-			if (decimalElement.hasAttribute("val")) {
-				return true;
-			}
-		}
-		return false;
-	}
-	
-	public static String getDecimalResponse (Element textQuestionResponse) {
-		Element decimalElement = (Element) textQuestionResponse.getElementsByTagName("decimal").item(0);
-		return decimalElement.getAttribute("val");
-	}
-	
-	public static boolean isTextQuestionStringAndHasResponse(Element textQuestionResponse) {
-		NodeList stringElementList = textQuestionResponse.getElementsByTagName("string");
-		if (stringElementList.getLength() > 0) {
-			Element stringElement = (Element) stringElementList.item(0);
-			if (stringElement.hasAttribute("val")) {
-				return true;
-			}
-		}
-		return false;
-	}
-	
-	public static String getStringResponse (Element textQuestionResponse) {
-		Element stringElement = (Element) textQuestionResponse.getElementsByTagName("string").item(0);
-		return stringElement.getAttribute("val");
-	}
-	
-	public static boolean isTextQuestionBooleanAndHasResponse(Element textQuestionResponse) {
-		NodeList booleanElementList = textQuestionResponse.getElementsByTagName("boolean");
-		if (booleanElementList.getLength() > 0) {
-			Element booleanElement = (Element) booleanElementList.item(0);
-			if (booleanElement.hasAttribute("val")) {
-				return true;
-			}
-		}
-		return false;
-	}
-	
-	public static boolean isTextQuestionDateAndHasResponse(Element textQuestionResponse) {
-		NodeList dateElementList = textQuestionResponse.getElementsByTagName("date");
-		if (dateElementList.getLength() > 0) {
-			Element dateElement = (Element) dateElementList.item(0);
-			if (dateElement.hasAttribute("val")) {
-				return true;
-			}
-		}
-		return false;
-	}
-	
-	public static boolean isTextQuestionDateTimeAndHasResponse(Element textQuestionResponse) {
-		NodeList dateTimeElementList = textQuestionResponse.getElementsByTagName("dateTime");
+	public static boolean isTextQuestionOfTypeAndHasResponse(String type, Element textQuestionResponse) {
+		NodeList dateTimeElementList = textQuestionResponse.getElementsByTagName(type);
 		if (dateTimeElementList.getLength() > 0) {
 			Element dateTimeElement = (Element) dateTimeElementList.item(0);
 			if (dateTimeElement.hasAttribute("val")) {
@@ -361,7 +302,7 @@ public class parserhelper {
 		return false;
 	}
 	
-	public static Observation buildIntegerObservationResource(Element questionElement, String integerResponse, String id,
+	public static Observation buildTextObservationResource(String type, Element questionElement, String textResponse, String id,
 			FhirContext ctx) {
 
 		Observation observation = new Observation();
@@ -372,102 +313,19 @@ public class parserhelper {
 		observation.setStatus(ObservationStatus.FINAL);
 		observation.getCode().addCoding().setSystem("https://CAP.org").setCode(questionElement.getAttribute("ID"))
 				.setDisplay(questionElement.getAttribute("title"));
-		observation.setValue(new IntegerType(integerResponse)).getValueIntegerType();
-		observation.addDerivedFrom().setReference("DocumentReference/" + id);
-		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(observation);
-		System.out.println(encoded);
-		System.out.println("*******************************************************************");
-		return observation;
-	}
-	
-//	public static Observation buildDecimalObservationResource(Element questionElement, String decimalResponse, String id,
-//			FhirContext ctx) {
-//
-//		Observation observation = new Observation();
-//		observation.setSubject(new Reference("Patient/6754"));
-//		observation.addPerformer().setReference("Practitioner/pathpract1");
-//		observation.addIdentifier().setSystem("https://CAP.org")
-//				.setValue(id + "#" + questionElement.getAttribute("ID"));
-//		observation.setStatus(ObservationStatus.FINAL);
-//		observation.getCode().addCoding().setSystem("https://CAP.org").setCode(questionElement.getAttribute("ID"))
-//				.setDisplay(questionElement.getAttribute("title"));
-//		observation.setValue(new DecimalType(decimalResponse)).getValueDecimalType();
-//		observation.addDerivedFrom().setReference("DocumentReference/" + id);
-//		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(observation);
-//		System.out.println(encoded);
-//		System.out.println("*******************************************************************");
-//		return observation;
-//	}
-	
-	public static Observation buildStringObservationResource(Element questionElement, String stringResponse, String id,
-			FhirContext ctx) {
-
-		Observation observation = new Observation();
-		observation.setSubject(new Reference("Patient/6754"));
-		observation.addPerformer().setReference("Practitioner/pathpract1");
-		observation.addIdentifier().setSystem("https://CAP.org")
-				.setValue(id + "#" + questionElement.getAttribute("ID"));
-		observation.setStatus(ObservationStatus.FINAL);
-		observation.getCode().addCoding().setSystem("https://CAP.org").setCode(questionElement.getAttribute("ID"))
-				.setDisplay(questionElement.getAttribute("title"));
-		observation.setValue(new StringType(stringResponse)).getValueStringType();
-		observation.addDerivedFrom().setReference("DocumentReference/" + id);
-		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(observation);
-		System.out.println(encoded);
-		System.out.println("*******************************************************************");
-		return observation;
-	}
-	
-	public static Observation buildBooleanObservationResource(Element questionElement, String booleanResponse, String id,
-			FhirContext ctx) {
-
-		Observation observation = new Observation();
-		observation.setSubject(new Reference("Patient/6754"));
-		observation.addPerformer().setReference("Practitioner/pathpract1");
-		observation.addIdentifier().setSystem("https://CAP.org")
-				.setValue(id + "#" + questionElement.getAttribute("ID"));
-		observation.setStatus(ObservationStatus.FINAL);
-		observation.getCode().addCoding().setSystem("https://CAP.org").setCode(questionElement.getAttribute("ID"))
-				.setDisplay(questionElement.getAttribute("title"));
-		observation.setValue(new BooleanType(booleanResponse)).getValueBooleanType();
-		observation.addDerivedFrom().setReference("DocumentReference/" + id);
-		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(observation);
-		System.out.println(encoded);
-		System.out.println("*******************************************************************");
-		return observation;
-	}
-	
-//	public static Observation buildDateObservationResource(Element questionElement, String dateResponse, String id,
-//			FhirContext ctx) {
-//
-//		Observation observation = new Observation();
-//		observation.setSubject(new Reference("Patient/6754"));
-//		observation.addPerformer().setReference("Practitioner/pathpract1");
-//		observation.addIdentifier().setSystem("https://CAP.org")
-//				.setValue(id + "#" + questionElement.getAttribute("ID"));
-//		observation.setStatus(ObservationStatus.FINAL);
-//		observation.getCode().addCoding().setSystem("https://CAP.org").setCode(questionElement.getAttribute("ID"))
-//				.setDisplay(questionElement.getAttribute("title"));
-//		observation.setValue(new DateType(dateResponse)).getValueDateType();
-//		observation.addDerivedFrom().setReference("DocumentReference/" + id);
-//		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(observation);
-//		System.out.println(encoded);
-//		System.out.println("*******************************************************************");
-//		return observation;
-//	}
-	
-	public static Observation buildDateTimeObservationResource(Element questionElement, String dateTimeResponse, String id,
-			FhirContext ctx) {
-
-		Observation observation = new Observation();
-		observation.setSubject(new Reference("Patient/6754"));
-		observation.addPerformer().setReference("Practitioner/pathpract1");
-		observation.addIdentifier().setSystem("https://CAP.org")
-				.setValue(id + "#" + questionElement.getAttribute("ID"));
-		observation.setStatus(ObservationStatus.FINAL);
-		observation.getCode().addCoding().setSystem("https://CAP.org").setCode(questionElement.getAttribute("ID"))
-				.setDisplay(questionElement.getAttribute("title"));
-		observation.setValue(new DateTimeType(dateTimeResponse)).getValueDateTimeType();
+		if (type == INTEGER) {
+			observation.setValue(new IntegerType(textResponse)).getValueIntegerType();
+		} else if (type == DECIMAL) {
+			observation.setValue(new Quantity(Double.parseDouble(textResponse))).getValueQuantity();
+		} else if (type == STRING) {
+			observation.setValue(new StringType(textResponse)).getValueStringType();
+		} else if (type == BOOLEAN) {
+			observation.setValue(new BooleanType(textResponse)).getValueBooleanType();
+		} else if (type == DATETIME) {
+			observation.setValue(new DateTimeType(textResponse)).getValueDateTimeType();
+		} else {
+			System.out.println("ERROR: BUILDING OBERVATION FOR UNSUPPORTED TYPE");
+		}
 		observation.addDerivedFrom().setReference("DocumentReference/" + id);
 		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(observation);
 		System.out.println(encoded);
