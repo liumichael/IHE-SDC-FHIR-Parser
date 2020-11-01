@@ -22,7 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
  */
 
-
 package com.sdc.parser;
 
 import java.io.IOException;
@@ -52,6 +51,7 @@ import javax.xml.parsers.ParserConfigurationException;
 
 import org.hl7.fhir.r4.model.Attachment;
 import org.hl7.fhir.r4.model.Base64BinaryType;
+import org.hl7.fhir.r4.model.BooleanType;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryRequestComponent;
@@ -62,6 +62,7 @@ import org.hl7.fhir.r4.model.DateTimeType;
 import org.hl7.fhir.r4.model.DocumentReference;
 import org.hl7.fhir.r4.model.DocumentReference.DocumentReferenceContentComponent;
 import org.hl7.fhir.r4.model.Enumerations.DocumentReferenceStatus;
+import org.hl7.fhir.r4.model.IntegerType;
 import org.hl7.fhir.r4.model.Narrative;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Observation.ObservationStatus;
@@ -69,7 +70,9 @@ import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Practitioner;
 import org.hl7.fhir.r4.model.Provenance;
 import org.hl7.fhir.r4.model.Provenance.ProvenanceAgentComponent;
+import org.hl7.fhir.r4.model.Quantity;
 import org.hl7.fhir.r4.model.Reference;
+import org.hl7.fhir.r4.model.StringType;
 import org.hl7.fhir.r4.model.Type;
 import org.hl7.fhir.r4.model.codesystems.ProvenanceAgentRole;
 import org.w3c.dom.Document;
@@ -91,6 +94,12 @@ public class Interceptor {
 
 	FhirContext ctx;
 	String provenanceHeader = "{\"resourceType\": \"Provenance\",\"meta\": {\"versionId\": \"1\",\"lastUpdated\": \"2020-08-31T20:44:24.994+00:00\"},\"recorded\": \"2020-05-14T13:44:24.1703291-07:00\",\"agent\": [{\"type\": {\"text\": \"Joel and Alex testing\"}}]}";
+	final static String INTEGER = "integer";
+	final static String DECIMAL = "decimal";
+	final static String STRING = "string";
+	final static String BOOLEAN = "boolean";
+	final static String DATE = "date";
+	final static String DATETIME = "dateTime";
 
 	public Interceptor() {
 		this.ctx = FhirContext.forR4();
@@ -100,17 +109,18 @@ public class Interceptor {
 	@Produces(MediaType.TEXT_HTML)
 	public String sayHello() {
 		return "<h1>Welcome to Canada Health Infoway's SDC Parser Service</h1>"
-				+ "<p></p><h3> Optional Paremeters: server = [FHIR Server endpoint the resources will be posted to]</h3>" +
-				"<h3>Ex: /sdcparser?server=http://test.fhir.org/r4</h3>" + 
-				"<p></p><h3> Optional Paremeters: format = json/xml </h3>" +
-				"<h3>Ex: /sdcparser?server=http://test.fhir.org/r4&format=json</h3>";
+				+ "<p></p><h3> Optional Paremeters: server = [FHIR Server endpoint the resources will be posted to]</h3>"
+				+ "<h3>Ex: /sdcparser?server=http://test.fhir.org/r4</h3>"
+				+ "<p></p><h3> Optional Paremeters: format = json/xml </h3>"
+				+ "<h3>Ex: /sdcparser?server=http://test.fhir.org/r4&format=json</h3>";
 	}
 
 	@POST
 	@Consumes(MediaType.APPLICATION_XML)
 	@Produces(MediaType.APPLICATION_XML)
-	public String loadXMLFromString(String sdcForm, @QueryParam("server") String server, @QueryParam("format") String format) {
-		if(format == null || format.isEmpty() || format.equals("")) {
+	public String loadXMLFromString(String sdcForm, @QueryParam("server") String server,
+			@QueryParam("format") String format) {
+		if (format == null || format.isEmpty() || format.equals("")) {
 			format = "xml";
 		}
 		StringBuilder stringbuilder = new StringBuilder();
@@ -129,20 +139,18 @@ public class Interceptor {
 			String provenanceHeader = "{\"resourceType\": \"Provenance\",\"meta\": {\"versionId\": \"1\",\"lastUpdated\": \"TIME_STAMP\"},\"recorded\": \"TIME_STAMP\",\"agent\": [{\"type\": {\"text\": \"Joel and Alex testing\"}}]}";
 			provenanceHeader = provenanceHeader.replaceAll(Pattern.quote("TIME_STAMP"), getTimeStamp());
 			AdditionalRequestHeadersInterceptor interceptor = new AdditionalRequestHeadersInterceptor();
-			if(format.equalsIgnoreCase("xml")){
+			if (format.equalsIgnoreCase("xml")) {
 				interceptor.addHeaderValue("Content-Type", "application/fhir+xml");
-			}
-			else if(format.equalsIgnoreCase("json")) {
+			} else if (format.equalsIgnoreCase("json")) {
 				interceptor.addHeaderValue("Content-Type", "application/fhir+json");
-			}
-			else {
+			} else {
 				interceptor.addHeaderValue("Content-Type", "application/fhir+xml");
 			}
 			interceptor.addHeaderValue("X-Provenance", provenanceHeader);
 			client = ctx.newRestfulGenericClient(url.toString());
 			ctx.getRestfulClientFactory().setServerValidationMode(ServerValidationModeEnum.NEVER);
-			//client.registerInterceptor(interceptor);
-			
+			// client.registerInterceptor(interceptor);
+
 		}
 
 		try {
@@ -151,27 +159,24 @@ public class Interceptor {
 			InputSource is = new InputSource(new StringReader(sdcForm));
 			Document document = builder.parse(is);
 			ArrayList<Observation> observations = parseSDCForm(document, ctx);
-			//create bundle
-			String patientUUID = getUUID(); 
+			// create bundle
+			String patientUUID = getUUID();
 			String docRefUUID = getUUID();
 			Bundle bundle = createBundle(observations, ctx, sdcForm, document, patientUUID, docRefUUID);
 			String encoded = null;
-			if(format.equalsIgnoreCase("xml")) {
-				encoded  = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(bundle);
-			}
-			else {
+			if (format.equalsIgnoreCase("xml")) {
+				encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(bundle);
+			} else {
 				encoded = ctx.newJsonParser().setPrettyPrint(true).encodeResourceToString(bundle);
 			}
-					
-			if(noServer) {
+
+			if (noServer) {
 				stringbuilder.append(encoded);
-			}
-			else {
+			} else {
 				Bundle resp = client.transaction().withBundle(bundle).execute();
-				if(format.equalsIgnoreCase("json")) {
+				if (format.equalsIgnoreCase("json")) {
 					stringbuilder.append(ctx.newJsonParser().setPrettyPrint(true).encodeResourceToString(resp));
-				}
-				else {
+				} else {
 					stringbuilder.append(ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(resp));
 				}
 			}
@@ -280,13 +285,14 @@ public class Interceptor {
 		for (int i = 0; i < questionList.size(); i++) {
 		}
 	}
-	
-	public static Bundle createBundle(ArrayList<Observation> Observations, FhirContext ctx, String sdcForm, Document form, String patientUUID, String docRefUUID) {
+
+	public static Bundle createBundle(ArrayList<Observation> Observations, FhirContext ctx, String sdcForm,
+			Document form, String patientUUID, String docRefUUID) {
 		Bundle bundle = new Bundle();
-		String bundleUUID = getUUID();  
+		String bundleUUID = getUUID();
 		bundle.setId(bundleUUID);
 		bundle.setType(BundleType.TRANSACTION);
-		//Add patient resource
+		// Add patient resource
 		BundleEntryComponent patient = new BundleEntryComponent();
 		patient.setFullUrl(patientUUID);
 		patient.setResource(createPatient(ctx));
@@ -295,18 +301,18 @@ public class Interceptor {
 		patientRequest.setUrl("Patient?identifier=urn:system|JoelAlexPatient");
 		patient.setRequest(patientRequest);
 		bundle.addEntry(patient);
-		//Add document reference resource
+		// Add document reference resource
 		BundleEntryComponent docRef = new BundleEntryComponent();
 		docRef.setFullUrl(docRefUUID);
-		docRef.setResource(createDocReference(ctx, sdcForm, form ,patientUUID));
+		docRef.setResource(createDocReference(ctx, sdcForm, form, patientUUID));
 		BundleEntryRequestComponent docRefRequest = new BundleEntryRequestComponent();
 		docRefRequest.setMethod(HTTPVerb.POST);
 		docRefRequest.setUrl("DocumentReference");
 		docRef.setRequest(docRefRequest);
 		bundle.addEntry(docRef);
-		//add observations
-		for(Observation obs: Observations) {
-			obs.setSubject(new Reference( patientUUID ));
+		// add observations
+		for (Observation obs : Observations) {
+			obs.setSubject(new Reference(patientUUID));
 			obs.addDerivedFrom().setReference(docRefUUID);
 			BundleEntryComponent bec = new BundleEntryComponent();
 			bec.setFullUrl(getUUID());
@@ -328,6 +334,7 @@ public class Interceptor {
 		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(patient);
 		return patient;
 	}
+
 	public static Practitioner createPractitioner(FhirContext ctx) {
 		Practitioner pract = new Practitioner();
 		pract.addName().setFamily("Bit").addGiven("Rex");
@@ -335,6 +342,7 @@ public class Interceptor {
 		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(pract);
 		return pract;
 	}
+
 	public static Provenance createProvenance(FhirContext ctx, String bundleUUID) {
 		DateFormat df = new SimpleDateFormat("dd/MM/yy HH:mm:ss");
 		Date dateobj = new Date();
@@ -345,11 +353,14 @@ public class Interceptor {
 		provenance.getTargetFirstRep().setReference("Bundle/" + bundleUUID);
 		ProvenanceAgentComponent pac = new ProvenanceAgentComponent();
 		pac.getRoleFirstRep().getCodingFirstRep().setCode(ProvenanceAgentRole.ASSEMBLER.toString())
-		.setDisplay(ProvenanceAgentRole.ASSEMBLER.getDisplay()).setSystem("http://terminology.hl7.org/CodeSystem/provenance-participant-type");
+				.setDisplay(ProvenanceAgentRole.ASSEMBLER.getDisplay())
+				.setSystem("http://terminology.hl7.org/CodeSystem/provenance-participant-type");
 		provenance.addAgent(pac);
 		return provenance;
 	}
-	public static DocumentReference createDocReference(FhirContext ctx, String sdcForm, Document form,  String patientUUID) {
+
+	public static DocumentReference createDocReference(FhirContext ctx, String sdcForm, Document form,
+			String patientUUID) {
 		DocumentReference docRef = new DocumentReference();
 		Narrative narry = new Narrative();
 		narry.setDivAsString("This DocumentReference was created by the Infoway Parser for form " + getFormID(form));
@@ -366,6 +377,7 @@ public class Interceptor {
 		docRef.addContent(drcc);
 		return docRef;
 	}
+
 	/**
 	 * This will traverse through the list of selected questions
 	 * 
@@ -383,6 +395,7 @@ public class Interceptor {
 			String questionID = questionElement.getAttribute("ID");
 			// get the listFieldElement
 			boolean isListQuestion = isQuestionAListQuestion(questionElement);
+			boolean isTextQuestion = isQuestionATextQuestion(questionElement);
 			if (isListQuestion) {
 				boolean isMultiSelect = getListFieldEelementToCheckForMultiSelect(questionElement);
 				// get the ListItems under this question where selected = true
@@ -397,7 +410,8 @@ public class Interceptor {
 								System.out.println("QUESTION.ID: " + questionElement.getAttribute("ID"));
 								System.out.println("LISTITEM.ID: " + listItemElement.getAttribute("ID"));
 								System.out.println("LISTITEM.TITLE: " + listItemElement.getAttribute("title"));
-								System.out.println("*******************************************************************");
+								System.out
+										.println("*******************************************************************");
 								observation = buildObservationResource(questionElement, listItemElement, Id, ctx);
 								observations.add(observation);
 							}
@@ -429,15 +443,81 @@ public class Interceptor {
 						System.out.println("*******************************************************************");
 					}
 				}
-			} //TODO: Add parsing text questions
+			} else if (isTextQuestion) {
+				Element textQuestion = getTextQuestion(questionElement);
+				Element textQuestionResponse = getTextQuestionResponse(textQuestion);
+				if (isTextQuestionOfTypeAndHasResponse(INTEGER, textQuestionResponse)) {
+					buildAndAddObservationForType(INTEGER, textQuestionResponse, questionElement, Id, ctx,
+							observations);
+				} else if (isTextQuestionOfTypeAndHasResponse(DECIMAL, textQuestionResponse)) {
+					buildAndAddObservationForType(DECIMAL, textQuestionResponse, questionElement, Id, ctx,
+							observations);
+				} else if (isTextQuestionOfTypeAndHasResponse(STRING, textQuestionResponse)) {
+					buildAndAddObservationForType(STRING, textQuestionResponse, questionElement, Id, ctx, observations);
+				} else if (isTextQuestionOfTypeAndHasResponse(BOOLEAN, textQuestionResponse)) {
+					buildAndAddObservationForType(BOOLEAN, textQuestionResponse, questionElement, Id, ctx,
+							observations);
+				} else if (isTextQuestionOfTypeAndHasResponse(DATE, textQuestionResponse)) {
+					System.out.println("Question is date");
+				} else if (isTextQuestionOfTypeAndHasResponse(DATETIME, textQuestionResponse)) {
+					buildAndAddObservationForType(DATETIME, textQuestionResponse, questionElement, Id, ctx,
+							observations);
+				} else {
+					System.out.println("ERROR. TextQuestion type is not accounted for!!!!!");
+				}
+			} else {
+				System.out.println("Question NOT List or Text");
+				System.out.println("QUESTION.ID: " + questionElement.getAttribute("ID"));
+			}
 		}
 		return observations;
 	}
-	
+
 	public static boolean isQuestionAListQuestion(Element questionElement) {
 		NodeList listFieldElementList = questionElement.getElementsByTagName("ListField");
 		if (listFieldElementList.getLength() > 0) {
 			return true;
+		}
+		return false;
+	}
+
+	public static boolean isQuestionATextQuestion(Element questionElement) {
+		NodeList responseFieldElementList = questionElement.getElementsByTagName("ResponseField");
+		if (responseFieldElementList.getLength() > 0) {
+			return true;
+		}
+		return false;
+	}
+
+	public static void buildAndAddObservationForType(String type, Element textQuestionResponse, Element questionElement,
+			String Id, FhirContext ctx, ArrayList<Observation> observations) {
+		String response = getTextResponseForType(type, textQuestionResponse);
+		Observation observation = buildTextObservationResource(type, questionElement, response, Id, ctx);
+		observations.add(observation);
+	}
+
+	public static Element getTextQuestion(Element questionElement) {
+		Element textQuestionElement = (Element) questionElement.getElementsByTagName("ResponseField").item(0);
+		return textQuestionElement;
+	}
+
+	public static Element getTextQuestionResponse(Element textQuestion) {
+		Element responseElement = (Element) textQuestion.getElementsByTagName("Response").item(0);
+		return responseElement;
+	}
+
+	public static String getTextResponseForType(String type, Element textQuestionResponse) {
+		Element integerElement = (Element) textQuestionResponse.getElementsByTagName(type).item(0);
+		return integerElement.getAttribute("val");
+	}
+
+	public static boolean isTextQuestionOfTypeAndHasResponse(String type, Element textQuestionResponse) {
+		NodeList dateTimeElementList = textQuestionResponse.getElementsByTagName(type);
+		if (dateTimeElementList.getLength() > 0) {
+			Element dateTimeElement = (Element) dateTimeElementList.item(0);
+			if (dateTimeElement.hasAttribute("val")) {
+				return true;
+			}
 		}
 		return false;
 	}
@@ -453,11 +533,42 @@ public class Interceptor {
 		return false;
 	}
 
+	public static Observation buildTextObservationResource(String type, Element questionElement, String textResponse,
+			String id, FhirContext ctx) {
+
+		Observation observation = new Observation();
+		observation.setSubject(new Reference("Patient/6754"));
+		observation.addPerformer().setReference("Practitioner/pathpract1");
+		observation.addIdentifier().setSystem("https://CAP.org")
+				.setValue(id + "#" + questionElement.getAttribute("ID"));
+		observation.setStatus(ObservationStatus.FINAL);
+		observation.getCode().addCoding().setSystem("https://CAP.org").setCode(questionElement.getAttribute("ID"))
+				.setDisplay(questionElement.getAttribute("title"));
+		if (type == INTEGER) {
+			observation.setValue(new IntegerType(textResponse)).getValueIntegerType();
+		} else if (type == DECIMAL) {
+			observation.setValue(new Quantity(Double.parseDouble(textResponse))).getValueQuantity();
+		} else if (type == STRING) {
+			observation.setValue(new StringType(textResponse)).getValueStringType();
+		} else if (type == BOOLEAN) {
+			observation.setValue(new BooleanType(textResponse)).getValueBooleanType();
+		} else if (type == DATETIME) {
+			observation.setValue(new DateTimeType(textResponse)).getValueDateTimeType();
+		} else {
+			System.out.println("ERROR: BUILDING OBERVATION FOR UNSUPPORTED TYPE");
+		}
+		observation.addDerivedFrom().setReference("DocumentReference/" + id);
+		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(observation);
+		System.out.println(encoded);
+		System.out.println("*******************************************************************");
+		return observation;
+	}
+
 	public static Observation buildObservationResource(Element questionElement, Element listItemElement, String id,
 			FhirContext ctx) {
 
 		Observation observation = new Observation();
-		//observation.setSubject(new Reference("Patient/6754"));
+		// observation.setSubject(new Reference("Patient/6754"));
 		observation.addIdentifier().setSystem("https://CAP.org")
 				.setValue(id + "#" + questionElement.getAttribute("ID"));
 		observation.setStatus(ObservationStatus.FINAL);
@@ -465,7 +576,7 @@ public class Interceptor {
 				.setDisplay(questionElement.getAttribute("title"));
 		observation.setValue(new CodeableConcept()).getValueCodeableConcept().addCoding().setSystem("https://CAP.org")
 				.setCode(listItemElement.getAttribute("ID")).setDisplay(listItemElement.getAttribute("title"));
-		//observation.addDerivedFrom().setReference("DocumentReference/" + id);
+		// observation.addDerivedFrom().setReference("DocumentReference/" + id);
 		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(observation);
 		return observation;
 
@@ -473,13 +584,13 @@ public class Interceptor {
 
 	public static Observation buildMultiSelectObservationResource(Element questionElement, String id, FhirContext ctx) {
 		Observation observation = new Observation();
-		//observation.setSubject(new Reference("Patient/6754"));
+		// observation.setSubject(new Reference("Patient/6754"));
 		observation.addIdentifier().setSystem("https://CAP.org")
 				.setValue(id + "." + questionElement.getAttribute("ID"));
 		observation.setStatus(ObservationStatus.FINAL);
 		observation.getCode().addCoding().setSystem("https://CAP.org").setCode(questionElement.getAttribute("ID"))
 				.setDisplay(questionElement.getAttribute("title"));
-		//observation.addDerivedFrom().setReference("DocumentReference/" + id);
+		// observation.addDerivedFrom().setReference("DocumentReference/" + id);
 		return observation;
 	}
 
@@ -494,16 +605,17 @@ public class Interceptor {
 
 		return observation;
 	}
-	
+
 	/**
 	 * Generated a Globally Unique Identifier
+	 * 
 	 * @return
 	 */
 	public static String getUUID() {
 		String uuid = "urn:uuid:" + String.valueOf(UUID.randomUUID());
 		return uuid;
 	}
-	
+
 	/*
 	 * Produces the current time stamp of the instant that it is called
 	 */
