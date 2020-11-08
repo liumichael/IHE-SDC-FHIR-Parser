@@ -62,6 +62,8 @@ import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.DateTimeType;
 import org.hl7.fhir.r4.model.DocumentReference;
 import org.hl7.fhir.r4.model.DocumentReference.DocumentReferenceContentComponent;
+import org.hl7.fhir.r4.model.Encounter;
+import org.hl7.fhir.r4.model.Encounter.EncounterStatus;
 import org.hl7.fhir.r4.model.Enumerations.DocumentReferenceStatus;
 import org.hl7.fhir.r4.model.IntegerType;
 import org.hl7.fhir.r4.model.MessageHeader;
@@ -312,6 +314,12 @@ public class Interceptor {
 		patient.setFullUrl(patientUUID);
 		patient.setResource(createPatient(ctx));
 		bundle.addEntry(patient);
+		//Add message header
+		BundleEntryComponent encounter = new BundleEntryComponent();
+		String encounterUUID = getUUID();
+		encounter.setFullUrl(encounterUUID);
+		encounter.setResource(createEncounter(ctx));
+		bundle.addEntry(encounter);
 		//Add document reference resource
 		BundleEntryComponent docRef = new BundleEntryComponent();
 		docRef.setFullUrl(docRefUUID);
@@ -339,7 +347,7 @@ public class Interceptor {
 		messageHeader.setText(messageHeaderNarrative);
 		messageHeader.getEventCoding().setSystem("http://example.org/fhir/message-events").setCode("admin-notify");
 		messageHeader.setSource(new MessageSourceComponent().setName("IHE SDC on FHIR Parser").setEndpoint("http://localhost:8080/sdcparser"));
-		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(messageHeader);
+//		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(messageHeader);
 		return messageHeader;
 	}
 
@@ -351,6 +359,7 @@ public class Interceptor {
 		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(patient);
 		return patient;
 	}
+
 	public static Practitioner createPractitioner(FhirContext ctx) {
 		Practitioner pract = new Practitioner();
 		pract.addName().setFamily("Bit").addGiven("Rex");
@@ -358,6 +367,26 @@ public class Interceptor {
 		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(pract);
 		return pract;
 	}
+
+	public static Encounter createEncounter(FhirContext ctx) {
+		String patientName = "JoelAlexPatient";
+		Encounter encounter = new Encounter();
+		encounter.addIdentifier().setValue("JoseEncounter1");
+		Narrative encounterNarrative = new Narrative();
+		encounterNarrative.setStatus(NarrativeStatus.GENERATED);
+		encounterNarrative.setDivAsString("Encounter with patient Adrenal biopsy");
+		encounter.setText(encounterNarrative);
+		encounter.setStatus(EncounterStatus.FINISHED);
+		Coding encounterClassCoding = new Coding();
+		encounterClassCoding.setSystem("http://terminology.hl7.org/CodeSystem/v3-ActCode");
+		encounterClassCoding.setCode("IMP");
+		encounterClassCoding.setDisplay("inpatient encounter");
+		encounter.setClass_(encounterClassCoding);
+		encounter.setSubject(new Reference("Patient/" + patientName));
+//		String encoded = ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(encounter);
+		return encounter;
+	}
+
 	public static Provenance createProvenance(FhirContext ctx, String bundleUUID) {
 		DateFormat df = new SimpleDateFormat("dd/MM/yy HH:mm:ss");
 		Date dateobj = new Date();
@@ -372,6 +401,7 @@ public class Interceptor {
 		provenance.addAgent(pac);
 		return provenance;
 	}
+
 	public static DocumentReference createDocReference(FhirContext ctx, String sdcForm, Document form,  String patientUUID) {
 		DocumentReference docRef = new DocumentReference();
 		Narrative narry = new Narrative();
